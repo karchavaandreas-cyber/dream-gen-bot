@@ -1,3 +1,23 @@
+# === MINI SERVEUR WEB POUR FLY.IO ===
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
+
+class HealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header('Content-type', 'text/plain')
+        self.end_headers()
+        self.wfile.write(b'DREAM GEN is alive')
+    def log_message(self, format, *args):
+        pass
+
+def run_web_server():
+    server = HTTPServer(('0.0.0.0', 8080), HealthHandler)
+    server.serve_forever()
+
+threading.Thread(target=run_web_server, daemon=True).start()
+# =====================================
+
 import fix_ssl
 
 import discord
@@ -19,24 +39,22 @@ SERVICES_FILE = "services.json"
 PANEL_FILE = "panel.json"
 COOLDOWN_FILE = "cooldowns.json"
 
-LOG_CHANNEL_ID = 1551981969502511224           # Salon #restock
-FREE_GEN_CHANNEL_ID = 1551949049178103941      # Salon #free-gen
-PREMIUM_GEN_CHANNEL_ID = 1551949049178103943   # Salon #premium-gen
+LOG_CHANNEL_ID = 1551981969502511224
+FREE_GEN_CHANNEL_ID = 1551949049178103941
+PREMIUM_GEN_CHANNEL_ID = 1551949049178103943
 
-VIP_ROLE_ID = 1551996352643211345              # Rôle VIP requis pour le premium
+VIP_ROLE_ID = 1551996352643211345
 
 GUILD_ID = 1551949048221536288
 BANNER_URL = "https://i.imgur.com/WevuFGx.gif"
 
 COOLDOWN_SECONDS = 60
 
-# === COULEURS DES PANELS ===
 PANEL_COLORS = {
     "free": 0x2B2D31,
     "premium": 0x2B2D31,
 }
 
-# === SERVICES ===
 DEFAULT_SERVICES = {
     "steam":       {"emoji": "<:steam:1551985805327736934>",       "color": 0x1B2838, "category": "free"},
     "microsoft":   {"emoji": "<:microsoft:1551986128859693096>",   "color": 0x00A4EF, "category": "free"},
@@ -48,7 +66,6 @@ DEFAULT_SERVICES = {
     "spotify":     {"emoji": "",                                    "color": 0x1DB954, "category": "premium"},
 }
 
-# === LOAD / SAVE ===
 def load_json(path, default):
     if os.path.exists(path):
         with open(path, "r") as f:
@@ -64,23 +81,19 @@ SERVICES = load_json(SERVICES_FILE, DEFAULT_SERVICES)
 panel_data = load_json(PANEL_FILE, {"free": {"channel_id": None, "message_id": None}, "premium": {"channel_id": None, "message_id": None}})
 cooldowns = load_json(COOLDOWN_FILE, {})
 
-# === BOT ===
 intents = discord.Intents.default()
 intents.message_content = True
 intents.guilds = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# === PANEL EMBED ===
 def build_panel_embed(category: str):
     color = PANEL_COLORS.get(category, 0x2B2D31)
-
     if category == "free":
         title = "Account Generator"
         desc = "Click a button to receive your free account in DM."
     else:
         title = "Premium Generator"
         desc = "Click a button to receive your premium account in DM.\n**VIP role required.**"
-
     embed = discord.Embed(title=title, description=desc, color=color)
     embed.set_image(url=BANNER_URL)
     return embed
@@ -102,7 +115,6 @@ async def refresh_all_panels():
     await refresh_panel("free")
     await refresh_panel("premium")
 
-# === COOLDOWN ===
 def is_owner(member: discord.Member) -> bool:
     return member.guild_permissions.administrator or member.id == member.guild.owner_id
 
@@ -120,12 +132,10 @@ def set_cooldown(user_id: int):
     cooldowns[str(user_id)] = time.time()
     save_json(COOLDOWN_FILE, cooldowns)
 
-# === GEN BUTTON ===
 class GenButton(discord.ui.Button):
     def __init__(self, service: str, emoji: str):
         emoji_obj = emoji if emoji else None
         has_stock = service in stock and len(stock.get(service, [])) > 0
-
         super().__init__(
             label=service.capitalize(),
             style=discord.ButtonStyle.secondary,
@@ -137,11 +147,9 @@ class GenButton(discord.ui.Button):
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
-
         service = self.service
         category = SERVICES[service].get("category", "free")
 
-        # === CHECK VIP POUR PREMIUM ===
         if category == "premium":
             if not is_owner(interaction.user) and not has_vip(interaction.user):
                 await interaction.followup.send(
@@ -150,7 +158,6 @@ class GenButton(discord.ui.Button):
                 )
                 return
 
-        # === CHECK COOLDOWN ===
         if not is_owner(interaction.user):
             remaining = get_remaining_cooldown(interaction.user.id)
             if remaining > 0:
@@ -159,7 +166,6 @@ class GenButton(discord.ui.Button):
                 )
                 return
 
-        # === CHECK STOCK ===
         if service not in stock or not stock[service]:
             await interaction.followup.send(
                 f"No stock left for **{service}**.", ephemeral=True
@@ -178,13 +184,10 @@ class GenButton(discord.ui.Button):
 
         try:
             await interaction.user.send(embed=dm_embed)
-
             if not is_owner(interaction.user):
                 set_cooldown(interaction.user.id)
-
             await interaction.followup.send("Account sent in DM.", ephemeral=True)
 
-            # === MESSAGE DE GEN DANS LE BON SALON ===
             if category == "premium":
                 gen_channel_id = PREMIUM_GEN_CHANNEL_ID
             else:
@@ -209,7 +212,6 @@ class GenButton(discord.ui.Button):
             save_json(STOCK_FILE, stock)
             await interaction.followup.send("Enable your DMs to receive the account.", ephemeral=True)
 
-# === VIEW ===
 class GenView(discord.ui.View):
     def __init__(self, category: str):
         super().__init__(timeout=None)
@@ -217,7 +219,6 @@ class GenView(discord.ui.View):
             if data.get("category") == category:
                 self.add_item(GenButton(service, data["emoji"]))
 
-# === /panel ===
 @bot.tree.command(name="panel", description="Show the FREE panel")
 @app_commands.default_permissions(administrator=True)
 async def panel(interaction: discord.Interaction):
@@ -227,7 +228,6 @@ async def panel(interaction: discord.Interaction):
     save_json(PANEL_FILE, panel_data)
     await interaction.followup.send("FREE panel sent.", ephemeral=True)
 
-# === /panel2 ===
 @bot.tree.command(name="panel2", description="Show the PREMIUM panel")
 @app_commands.default_permissions(administrator=True)
 async def panel2(interaction: discord.Interaction):
@@ -237,38 +237,30 @@ async def panel2(interaction: discord.Interaction):
     save_json(PANEL_FILE, panel_data)
     await interaction.followup.send("PREMIUM panel sent.", ephemeral=True)
 
-# === HELPER ADD SERVICE ===
 async def _add_service_common(interaction, nom, emoji, categorie, couleur):
     nom = nom.lower().strip()
-
     if nom in SERVICES:
         await interaction.followup.send(f"Service **{nom}** already exists.", ephemeral=True)
         return
-
     if emoji and emoji.isdigit():
         emoji = f"<:emoji:{emoji}>"
-
     if emoji and not emoji.startswith("<"):
         await interaction.followup.send(
             "Invalid emoji format. Use `<:name:ID>`, a raw ID, or leave empty.", ephemeral=True
         )
         return
-
     try:
         color_int = int(couleur.replace("0x", "").replace("#", ""), 16)
     except ValueError:
         color_int = 0x2B2D31
-
     SERVICES[nom] = {"emoji": emoji, "color": color_int, "category": categorie}
     save_json(SERVICES_FILE, SERVICES)
-
     await interaction.followup.send(
         f"Service **{nom}** added as **{categorie}**. Run `/panel` or `/panel2` to see it.",
         ephemeral=True
     )
     await refresh_all_panels()
 
-# === /addservice (FREE) ===
 @bot.tree.command(name="addservice", description="Add a FREE service")
 @app_commands.default_permissions(administrator=True)
 @app_commands.describe(
@@ -280,7 +272,6 @@ async def addservice(interaction: discord.Interaction, nom: str, emoji: str, cou
     await interaction.response.defer(ephemeral=True)
     await _add_service_common(interaction, nom, emoji, "free", couleur)
 
-# === /addservice2 (PREMIUM) ===
 @bot.tree.command(name="addservice2", description="Add a PREMIUM service")
 @app_commands.default_permissions(administrator=True)
 @app_commands.describe(
@@ -292,39 +283,31 @@ async def addservice2(interaction: discord.Interaction, nom: str, emoji: str, co
     await interaction.response.defer(ephemeral=True)
     await _add_service_common(interaction, nom, emoji, "premium", couleur)
 
-# === /addstock ===
 @bot.tree.command(name="addstock", description="Add accounts to stock")
 @app_commands.default_permissions(administrator=True)
 @app_commands.describe(service="The service", comptes="Accounts separated by commas or newlines")
 async def addstock(interaction: discord.Interaction, service: str, comptes: str):
     await interaction.response.defer(ephemeral=True)
-
     service = service.lower()
     if service not in SERVICES:
         await interaction.followup.send("Unknown service.", ephemeral=True)
         return
-
     liste = [c.strip() for c in re.split(r"[,\n;]+", comptes) if c.strip()]
     if not liste:
         await interaction.followup.send("No valid account found.", ephemeral=True)
         return
-
     stock.setdefault(service, []).extend(liste)
     save_json(STOCK_FILE, stock)
-
     await interaction.followup.send(
         f"**{len(liste)}** account(s) added for **{service}**. Stock: `{len(stock[service])}`",
         ephemeral=True
     )
-
     await refresh_all_panels()
 
-    # === LOG RESTOCK ===
     if LOG_CHANNEL_ID:
         log_channel = bot.get_channel(LOG_CHANNEL_ID)
         if log_channel:
             cat = SERVICES[service].get("category", "free").upper()
-
             embed = discord.Embed(
                 title=f"NEW RESTOCK • {cat}",
                 description=f"**{len(liste)}** new account(s) added to the stock!",
@@ -343,25 +326,20 @@ async def addstock(interaction: discord.Interaction, service: str, comptes: str)
 async def service_autocomplete(interaction: discord.Interaction, current: str):
     return [app_commands.Choice(name=s.capitalize(), value=s) for s in SERVICES.keys() if current.lower() in s.lower()]
 
-# === /removeservice ===
 @bot.tree.command(name="removeservice", description="Remove a service")
 @app_commands.default_permissions(administrator=True)
 @app_commands.describe(nom="Name of the service to remove")
 async def removeservice(interaction: discord.Interaction, nom: str):
     await interaction.response.defer(ephemeral=True)
     nom = nom.lower().strip()
-
     if nom not in SERVICES:
         await interaction.followup.send(f"Service **{nom}** does not exist.", ephemeral=True)
         return
-
     del SERVICES[nom]
     save_json(SERVICES_FILE, SERVICES)
-
     if nom in stock:
         del stock[nom]
         save_json(STOCK_FILE, stock)
-
     await interaction.followup.send(f"Service **{nom}** removed.", ephemeral=True)
     await refresh_all_panels()
 
@@ -369,7 +347,6 @@ async def removeservice(interaction: discord.Interaction, nom: str):
 async def removeservice_autocomplete(interaction: discord.Interaction, current: str):
     return [app_commands.Choice(name=s.capitalize(), value=s) for s in SERVICES.keys() if current.lower() in s.lower()]
 
-# === /stock ===
 @bot.tree.command(name="stock", description="View current stock")
 async def stock_cmd(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
@@ -388,7 +365,6 @@ async def stock_cmd(interaction: discord.Interaction):
             free_msg += line
     await interaction.followup.send(free_msg + premium_msg, ephemeral=True)
 
-# === /resetcooldown ===
 @bot.tree.command(name="resetcooldown", description="Reset a member's cooldown")
 @app_commands.default_permissions(administrator=True)
 async def resetcooldown(interaction: discord.Interaction, membre: discord.Member):
