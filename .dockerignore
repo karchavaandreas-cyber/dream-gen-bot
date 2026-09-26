@@ -1,0 +1,6 @@
+.env
+__pycache__/
+*.json
+.git
+uncensored-coder/
+bot.py.save
