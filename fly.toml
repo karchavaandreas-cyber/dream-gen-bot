@@ -2,7 +2,15 @@ app = "dream-gen-bot"
 primary_region = "cdg"
 
 [build]
-  dockerfile = "Dockerfile"
+  builder = "paketobuildpacks/builder:base"
+  buildpacks = ["gcr.io/paketo-buildpacks/python"]
+  [[build.args]]
+    name = "BP_CPYTHON_VERSION"
+    value = "3.11"
+
+[env]
+  PORT = "8080"
+  BP_LAUNCH_COMMAND = "python3 bot.py"
 
 [http_service]
   internal_port = 8080
