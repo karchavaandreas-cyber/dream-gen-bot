@@ -47,10 +47,15 @@ VIP_ROLE_ID = 1551996352643211345
 
 GUILD_ID = 1551949048221536288
 
-# === BANNIÈRE (ton GIF Eldorado) ===
+# === BANNIÈRE ===
 BANNER_URL = "https://i.imgur.com/JlkSP96.gif"
 
-COOLDOWN_SECONDS = 60
+# === COOLDOWN (2 minutes) ===
+COOLDOWN_SECONDS = 120
+
+# === STATUS REQUIS POUR LE FREE GEN ===
+STATUS_REQUIRED = "free eldorado account"
+STATUS_INVITE = "https://discord.gg/2hA57kcbd"
 
 # === COULEURS ELDORADO ===
 ELDO_YELLOW = 0xFFC72C
@@ -64,7 +69,7 @@ PANEL_COLORS = {
 # === EMOJI ELDO ===
 ELDO_EMOJI = "<:eldo:1553801485488365729>"
 
-# === SERVICES (label = nom affiché sur le bouton) ===
+# === SERVICES ===
 DEFAULT_SERVICES = {
     "eldorado-free": {"label": "ELDORADO", "emoji": ELDO_EMOJI, "color": ELDO_YELLOW, "category": "free"},
     "eldorado-vip":  {"label": "ELDORADO", "emoji": ELDO_EMOJI, "color": ELDO_GOLD,   "category": "premium"},
@@ -89,14 +94,21 @@ cooldowns = load_json(COOLDOWN_FILE, {})
 intents = discord.Intents.default()
 intents.message_content = True
 intents.guilds = True
+intents.presences = True  # OBLIGATOIRE pour lire les status
+intents.members = True    # OBLIGATOIRE pour lire les status
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# === PANEL EMBED (MINIMALISTE ELDORADO) ===
+# === PANEL EMBED ===
 def build_panel_embed(category: str):
     if category == "free":
         color = ELDO_YELLOW
         title = "ELDORADO • FREE"
-        desc = "Click the button below to receive your free Eldorado account."
+        desc = (
+            "Click the button below to receive your free Eldorado account.\n\n"
+            f"**⚠️ REQUIRED STATUS:**\n"
+            f"`{STATUS_REQUIRED}`\n"
+            f"`{STATUS_INVITE}`"
+        )
     else:
         color = ELDO_GOLD
         title = "ELDORADO • VIP"
@@ -130,6 +142,14 @@ def is_owner(member: discord.Member) -> bool:
 def has_vip(member: discord.Member) -> bool:
     return any(role.id == VIP_ROLE_ID for role in member.roles)
 
+def has_required_status(member: discord.Member) -> bool:
+    """Vérifie si le membre a le status requis dans son custom status."""
+    for activity in member.activities:
+        if isinstance(activity, discord.CustomActivity):
+            if activity.name and STATUS_REQUIRED.lower() in activity.name.lower():
+                return True
+    return False
+
 def get_remaining_cooldown(user_id: int) -> int:
     if str(user_id) not in cooldowns:
         return 0
@@ -160,6 +180,7 @@ class GenButton(discord.ui.Button):
         service = self.service
         category = SERVICES[service].get("category", "free")
 
+        # === CHECK VIP POUR PREMIUM ===
         if category == "premium":
             if not is_owner(interaction.user) and not has_vip(interaction.user):
                 await interaction.followup.send(
@@ -167,17 +188,31 @@ class GenButton(discord.ui.Button):
                 )
                 return
 
+        # === CHECK STATUS POUR FREE ===
+        if category == "free":
+            if not is_owner(interaction.user) and not has_required_status(interaction.user):
+                await interaction.followup.send(
+                    f"❌ You must put this in your **custom status** to generate:\n"
+                    f"`{STATUS_REQUIRED}`\n"
+                    f"`{STATUS_INVITE}`\n\n"
+                    f"After setting it, try again.",
+                    ephemeral=True
+                )
+                return
+
+        # === CHECK COOLDOWN ===
         if not is_owner(interaction.user):
             remaining = get_remaining_cooldown(interaction.user.id)
             if remaining > 0:
                 await interaction.followup.send(
-                    f"Wait **{remaining}s** before generating again.", ephemeral=True
+                    f"⏳ Wait **{remaining}s** before generating again.", ephemeral=True
                 )
                 return
 
+        # === CHECK STOCK ===
         if service not in stock or not stock[service]:
             await interaction.followup.send(
-                f"No stock left.", ephemeral=True
+                f"❌ No stock left.", ephemeral=True
             )
             return
 
@@ -195,7 +230,7 @@ class GenButton(discord.ui.Button):
             await interaction.user.send(embed=dm_embed)
             if not is_owner(interaction.user):
                 set_cooldown(interaction.user.id)
-            await interaction.followup.send("Sent in DM.", ephemeral=True)
+            await interaction.followup.send("✅ Sent in DM.", ephemeral=True)
 
             if category == "premium":
                 gen_channel_id = PREMIUM_GEN_CHANNEL_ID
@@ -219,7 +254,7 @@ class GenButton(discord.ui.Button):
         except discord.Forbidden:
             stock[service].insert(0, compte)
             save_json(STOCK_FILE, stock)
-            await interaction.followup.send("Enable your DMs.", ephemeral=True)
+            await interaction.followup.send("❌ Enable your DMs.", ephemeral=True)
 
 # === VIEW ===
 class GenView(discord.ui.View):
@@ -322,7 +357,7 @@ async def addstock(interaction: discord.Interaction, service: str, comptes: str)
     stock.setdefault(service, []).extend(liste)
     save_json(STOCK_FILE, stock)
     await interaction.followup.send(
-        f"**{len(liste)}** account(s) added. Stock: `{len(stock[service])}`",
+        f"✅ **{len(liste)}** account(s) added. Stock: `{len(stock[service])}`",
         ephemeral=True
     )
     await refresh_all_panels()
@@ -367,7 +402,7 @@ async def removeservice(interaction: discord.Interaction, nom: str):
     if nom in stock:
         del stock[nom]
         save_json(STOCK_FILE, stock)
-    await interaction.followup.send(f"Service **{nom}** removed.", ephemeral=True)
+    await interaction.followup.send(f"✅ Service **{nom}** removed.", ephemeral=True)
     await refresh_all_panels()
 
 @removeservice.autocomplete("nom")
@@ -400,7 +435,7 @@ async def resetcooldown(interaction: discord.Interaction, membre: discord.Member
     if str(membre.id) in cooldowns:
         del cooldowns[str(membre.id)]
         save_json(COOLDOWN_FILE, cooldowns)
-        await interaction.followup.send(f"Cooldown of {membre.mention} reset.", ephemeral=True)
+        await interaction.followup.send(f"✅ Cooldown of {membre.mention} reset.", ephemeral=True)
     else:
         await interaction.followup.send(f"{membre.mention} has no cooldown.", ephemeral=True)
 
