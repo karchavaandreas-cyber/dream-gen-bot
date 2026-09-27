@@ -54,8 +54,7 @@ BANNER_URL = "https://i.imgur.com/JlkSP96.gif"
 COOLDOWN_SECONDS = 120
 
 # === STATUS REQUIS POUR LE FREE ===
-# On vérifie juste le début (Discord tronque à 128 caractères)
-STATUS_REQUIRED = "free eldorado account"
+STATUS_REQUIRED = "best gen : https://discord.gg/7VxRnsYrE6"
 
 # === COULEURS ELDORADO ===
 ELDO_YELLOW = 0xFFC72C
@@ -98,7 +97,7 @@ intents.presences = True
 intents.members = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# === PANEL EMBED (STYLE PROPRE) ===
+# === PANEL EMBED ===
 def build_panel_embed(category: str):
     if category == "free":
         color = ELDO_YELLOW
@@ -138,7 +137,7 @@ def has_vip(member: discord.Member) -> bool:
     return any(role.id == VIP_ROLE_ID for role in member.roles)
 
 def has_required_status(member: discord.Member) -> bool:
-    """Vérifie si le membre a 'free eldorado account' dans son custom status."""
+    """Vérifie si le membre a le status requis dans son custom status."""
     for activity in member.activities:
         if isinstance(activity, discord.CustomActivity):
             if activity.name and STATUS_REQUIRED.lower() in activity.name.lower():
@@ -187,8 +186,8 @@ class GenButton(discord.ui.Button):
         if category == "free":
             if not is_owner(interaction.user) and not has_required_status(interaction.user):
                 await interaction.followup.send(
-                    f"You must put this in your **custom status** to generate:\n"
-                    f"`free eldorado account : https://discord.gg/7VxRnsYrE6`",
+                    f"❌ You must put this in your **custom status** to generate:\n"
+                    f"`best gen : https://discord.gg/7VxRnsYrE6`",
                     ephemeral=True
                 )
                 return
@@ -198,14 +197,14 @@ class GenButton(discord.ui.Button):
             remaining = get_remaining_cooldown(interaction.user.id)
             if remaining > 0:
                 await interaction.followup.send(
-                    f"Wait **{remaining}s** before generating again.", ephemeral=True
+                    f"⏳ Wait **{remaining}s** before generating again.", ephemeral=True
                 )
                 return
 
         # === CHECK STOCK ===
         if service not in stock or not stock[service]:
             await interaction.followup.send(
-                f"No stock left.", ephemeral=True
+                f"❌ No stock left.", ephemeral=True
             )
             return
 
@@ -223,7 +222,7 @@ class GenButton(discord.ui.Button):
             await interaction.user.send(embed=dm_embed)
             if not is_owner(interaction.user):
                 set_cooldown(interaction.user.id)
-            await interaction.followup.send("Sent in DM.", ephemeral=True)
+            await interaction.followup.send("✅ Sent in DM.", ephemeral=True)
 
             if category == "premium":
                 gen_channel_id = PREMIUM_GEN_CHANNEL_ID
@@ -247,7 +246,7 @@ class GenButton(discord.ui.Button):
         except discord.Forbidden:
             stock[service].insert(0, compte)
             save_json(STOCK_FILE, stock)
-            await interaction.followup.send("Enable your DMs.", ephemeral=True)
+            await interaction.followup.send("❌ Enable your DMs.", ephemeral=True)
 
 # === VIEW ===
 class GenView(discord.ui.View):
