@@ -54,7 +54,8 @@ BANNER_URL = "https://i.imgur.com/JlkSP96.gif"
 COOLDOWN_SECONDS = 120
 
 # === STATUS REQUIS POUR LE FREE ===
-STATUS_REQUIRED = "free eldorado account : https://discord.gg/7VxRnsYrE6"
+# On vérifie juste le début (Discord tronque à 128 caractères)
+STATUS_REQUIRED = "free eldorado account"
 
 # === COULEURS ELDORADO ===
 ELDO_YELLOW = 0xFFC72C
@@ -137,6 +138,7 @@ def has_vip(member: discord.Member) -> bool:
     return any(role.id == VIP_ROLE_ID for role in member.roles)
 
 def has_required_status(member: discord.Member) -> bool:
+    """Vérifie si le membre a 'free eldorado account' dans son custom status."""
     for activity in member.activities:
         if isinstance(activity, discord.CustomActivity):
             if activity.name and STATUS_REQUIRED.lower() in activity.name.lower():
@@ -173,6 +175,7 @@ class GenButton(discord.ui.Button):
         service = self.service
         category = SERVICES[service].get("category", "free")
 
+        # === CHECK VIP POUR PREMIUM ===
         if category == "premium":
             if not is_owner(interaction.user) and not has_vip(interaction.user):
                 await interaction.followup.send(
@@ -180,14 +183,17 @@ class GenButton(discord.ui.Button):
                 )
                 return
 
+        # === CHECK STATUS POUR FREE ===
         if category == "free":
             if not is_owner(interaction.user) and not has_required_status(interaction.user):
                 await interaction.followup.send(
-                    f"You must put this in your **custom status** to generate:\n`{STATUS_REQUIRED}`",
+                    f"You must put this in your **custom status** to generate:\n"
+                    f"`free eldorado account : https://discord.gg/7VxRnsYrE6`",
                     ephemeral=True
                 )
                 return
 
+        # === CHECK COOLDOWN ===
         if not is_owner(interaction.user):
             remaining = get_remaining_cooldown(interaction.user.id)
             if remaining > 0:
@@ -196,6 +202,7 @@ class GenButton(discord.ui.Button):
                 )
                 return
 
+        # === CHECK STOCK ===
         if service not in stock or not stock[service]:
             await interaction.followup.send(
                 f"No stock left.", ephemeral=True
