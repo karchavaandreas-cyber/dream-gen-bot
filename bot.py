@@ -44,13 +44,15 @@ FREE_GEN_CHANNEL_ID = 1551949049178103941
 PREMIUM_GEN_CHANNEL_ID = 1553802370494890147
 
 VIP_ROLE_ID = 1551996352643211345
-FREE_ROLE_ID = 1553847227900891216
 
 GUILD_ID = 1551949048221536288
 
 BANNER_URL = "https://i.imgur.com/JlkSP96.gif"
 
 COOLDOWN_SECONDS = 120
+
+# === STATUS REQUIS POUR LE FREE ===
+STATUS_REQUIRED = "best gen : https://discord.gg/7VxRnsYrE6"
 
 ELDO_YELLOW = 0xFFC72C
 ELDO_GOLD = 0xFFAC33
@@ -85,6 +87,7 @@ cooldowns = load_json(COOLDOWN_FILE, {})
 intents = discord.Intents.default()
 intents.message_content = True
 intents.guilds = True
+intents.presences = True
 intents.members = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
@@ -124,8 +127,13 @@ def is_owner(member: discord.Member) -> bool:
 def has_vip(member: discord.Member) -> bool:
     return any(role.id == VIP_ROLE_ID for role in member.roles)
 
-def has_free(member: discord.Member) -> bool:
-    return any(role.id == FREE_ROLE_ID for role in member.roles)
+def has_required_status(member: discord.Member) -> bool:
+    """Vérifie si le membre a le status requis dans son custom status."""
+    for activity in member.activities:
+        if isinstance(activity, discord.CustomActivity):
+            if activity.name and STATUS_REQUIRED.lower() in activity.name.lower():
+                return True
+    return False
 
 def get_remaining_cooldown(user_id: int) -> int:
     if str(user_id) not in cooldowns:
@@ -162,9 +170,10 @@ class GenButton(discord.ui.Button):
                 return
 
         if category == "free":
-            if not is_owner(interaction.user) and not has_free(interaction.user):
+            if not is_owner(interaction.user) and not has_required_status(interaction.user):
                 await interaction.followup.send(
-                    "You need the **Free Access** role. Go to `#get-role` to get it.",
+                    f"You must put this in your **custom status** to generate:\n"
+                    f"`best gen : https://discord.gg/7VxRnsYrE6`",
                     ephemeral=True
                 )
                 return
@@ -238,46 +247,21 @@ async def panel2(interaction: discord.Interaction):
     save_json(PANEL_FILE, panel_data)
     await interaction.followup.send("Panel VIP sent.", ephemeral=True)
 
-@bot.tree.command(name="rolepanel", description="Send the role panel")
+# === /debug (pour vérifier ce que le bot voit) ===
+@bot.tree.command(name="debug", description="Debug status")
 @app_commands.default_permissions(administrator=True)
-async def rolepanel(interaction: discord.Interaction):
+async def debug(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
-    embed = discord.Embed(
-        title="GET FREE ACCESS",
-        description=(
-            "React with 🟡 below to get the **Free Access** role.\n"
-            "This role allows you to generate free Eldorado accounts."
-        ),
-        color=ELDO_YELLOW
+    activities = []
+    for activity in interaction.user.activities:
+        activities.append(f"Type: {type(activity).__name__} | Name: {getattr(activity, 'name', 'N/A')}")
+    if not activities:
+        await interaction.followup.send("❌ Aucun status détecté par le bot.", ephemeral=True)
+        return
+    await interaction.followup.send(
+        "**Ce que le bot voit :**\n```\n" + "\n".join(activities) + "\n```",
+        ephemeral=True
     )
-    embed.set_footer(text="DREAM GEN x ELDORADO")
-    msg = await interaction.channel.send(embed=embed)
-    await msg.add_reaction("🟡")
-    await interaction.followup.send("Role panel sent.", ephemeral=True)
-
-@bot.event
-async def on_raw_reaction_add(payload):
-    if payload.user_id == bot.user.id:
-        return
-    if str(payload.emoji) != "🟡":
-        return
-    guild = bot.get_guild(payload.guild_id)
-    if not guild:
-        return
-    member = guild.get_member(payload.user_id)
-    if not member:
-        return
-    role = guild.get_role(FREE_ROLE_ID)
-    if not role:
-        return
-    try:
-        await member.add_roles(role)
-        try:
-            await member.send("You received the **Free Access** role on DREAM GEN!")
-        except:
-            pass
-    except Exception as e:
-        print(f"⚠️ Error adding role: {e}")
 
 @bot.tree.command(name="addservice", description="Add a FREE service")
 @app_commands.default_permissions(administrator=True)
