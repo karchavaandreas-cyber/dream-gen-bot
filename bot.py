@@ -42,6 +42,7 @@ COOLDOWN_FILE = "cooldowns.json"
 LOG_CHANNEL_ID = 1551981969502511224
 FREE_GEN_CHANNEL_ID = 1551949049178103941
 PREMIUM_GEN_CHANNEL_ID = 1553802370494890147
+GET_ROLE_CHANNEL_ID = 1553849964738904064
 
 VIP_ROLE_ID = 1551996352643211345
 FREE_ROLE_ID = 1553847227900891216
@@ -159,7 +160,7 @@ class GenButton(discord.ui.Button):
         if category == "free":
             if not is_owner(interaction.user) and not has_free(interaction.user):
                 await interaction.followup.send(
-                    "You need the **Free Access** role. Go to <#1553847227900891216> to get it.",
+                    f"You need the **Free Access** role. Go to <#{GET_ROLE_CHANNEL_ID}> to get it.",
                     ephemeral=True
                 )
                 return
