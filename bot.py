@@ -54,7 +54,7 @@ BANNER_URL = "https://i.imgur.com/JlkSP96.gif"
 COOLDOWN_SECONDS = 120
 
 # === STATUS REQUIS POUR LE FREE ===
-STATUS_REQUIRED = "free eldorado account"
+STATUS_REQUIRED = "free eldorado account : https://discord.gg/7VxRnsYrE6"
 
 # === COULEURS ELDORADO ===
 ELDO_YELLOW = 0xFFC72C
@@ -97,7 +97,7 @@ intents.presences = True
 intents.members = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# === PANEL EMBED (STYLE PROPRE, COMME TA CAPTURE) ===
+# === PANEL EMBED (STYLE PROPRE) ===
 def build_panel_embed(category: str):
     if category == "free":
         color = ELDO_YELLOW
@@ -183,7 +183,7 @@ class GenButton(discord.ui.Button):
         if category == "free":
             if not is_owner(interaction.user) and not has_required_status(interaction.user):
                 await interaction.followup.send(
-                    f"You must put `{STATUS_REQUIRED}` in your custom status to generate.",
+                    f"You must put this in your **custom status** to generate:\n`{STATUS_REQUIRED}`",
                     ephemeral=True
                 )
                 return
@@ -348,26 +348,11 @@ async def addstock(interaction: discord.Interaction, service: str, comptes: str)
     )
     await refresh_all_panels()
 
+    # === LOG RESTOCK MINIMALISTE ===
     if LOG_CHANNEL_ID:
         log_channel = bot.get_channel(LOG_CHANNEL_ID)
         if log_channel:
-            cat = SERVICES[service].get("category", "free").upper()
-            cat_label = "FREE" if cat == "FREE" else "VIP"
-
-            embed = discord.Embed(
-                title=f"NEW RESTOCK • {cat_label}",
-                description=f"**{len(liste)}** new Eldorado account(s) added.",
-                color=SERVICES[service]["color"]
-            )
-            embed.add_field(name="Service", value=service.capitalize(), inline=True)
-            embed.add_field(name="Added", value=f"`+{len(liste)}`", inline=True)
-            embed.add_field(name="Stock", value=f"`{len(stock[service])}`", inline=True)
-            embed.set_footer(
-                text=f"Restocked by {interaction.user} • DREAM GEN",
-                icon_url=interaction.user.display_avatar.url
-            )
-            embed.timestamp = discord.utils.utcnow()
-            await log_channel.send(embed=embed)
+            await log_channel.send(f"**{len(liste)}** Eldorado account(s) restocked.")
 
 @addstock.autocomplete("service")
 async def service_autocomplete(interaction: discord.Interaction, current: str):
