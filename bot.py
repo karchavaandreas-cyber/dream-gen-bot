@@ -54,8 +54,8 @@ BANNER_URL = "https://i.imgur.com/JlkSP96.gif"
 COOLDOWN_SECONDS = 120
 
 # === STATUS REQUIS POUR LE FREE GEN ===
+# Le bot vérifie juste que le status contient ce texte
 STATUS_REQUIRED = "free eldorado account"
-STATUS_INVITE = "https://discord.gg/2hA57kcbd"
 
 # === COULEURS ELDORADO ===
 ELDO_YELLOW = 0xFFC72C
@@ -94,28 +94,46 @@ cooldowns = load_json(COOLDOWN_FILE, {})
 intents = discord.Intents.default()
 intents.message_content = True
 intents.guilds = True
-intents.presences = True  # OBLIGATOIRE pour lire les status
-intents.members = True    # OBLIGATOIRE pour lire les status
+intents.presences = True
+intents.members = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# === PANEL EMBED ===
+# === PANEL EMBED (STYLE ELDORADO - version complète) ===
 def build_panel_embed(category: str):
     if category == "free":
         color = ELDO_YELLOW
-        title = "ELDORADO • FREE"
+        title = "🟡 ELDORADO GENERATOR • FREE"
         desc = (
-            "Click the button below to receive your free Eldorado account.\n\n"
-            f"**⚠️ REQUIRED STATUS:**\n"
-            f"`{STATUS_REQUIRED}`\n"
-            f"`{STATUS_INVITE}`"
+            "**Welcome to the Eldorado Free Generator.**\n"
+            "Click a button below to receive your **free Eldorado account** in DM.\n\n"
+            "**━━━━━━━━━━━━━━━━━━━━━━━**\n"
+            "```\n"
+            "🟡 Free Eldorado accounts\n"
+            "⚡ Instant delivery via DM\n"
+            "🎯 2 min cooldown\n"
+            "📌 Status required\n"
+            "```\n"
+            "**━━━━━━━━━━━━━━━━━━━━━━━**"
         )
     else:
         color = ELDO_GOLD
-        title = "ELDORADO • VIP"
-        desc = "Click the button below to receive your VIP Eldorado account."
+        title = "🟠 ELDORADO GENERATOR • VIP"
+        desc = (
+            "**Welcome to the Eldorado VIP Generator.**\n"
+            "Click a button below to receive your **VIP Eldorado account** in DM.\n\n"
+            "**━━━━━━━━━━━━━━━━━━━━━━━**\n"
+            "```\n"
+            "👑 VIP Eldorado accounts\n"
+            "⚡ Instant delivery via DM\n"
+            "🔥 VIP role required\n"
+            "🎯 2 min cooldown\n"
+            "```\n"
+            "**━━━━━━━━━━━━━━━━━━━━━━━**"
+        )
 
     embed = discord.Embed(title=title, description=desc, color=color)
     embed.set_image(url=BANNER_URL)
+    embed.set_footer(text="DREAM GEN x ELDORADO • Break The Grind")
     return embed
 
 async def refresh_panel(category: str):
@@ -184,7 +202,7 @@ class GenButton(discord.ui.Button):
         if category == "premium":
             if not is_owner(interaction.user) and not has_vip(interaction.user):
                 await interaction.followup.send(
-                    "You need the **VIP** role.", ephemeral=True
+                    "🟠 You need the **VIP** role.", ephemeral=True
                 )
                 return
 
@@ -192,10 +210,7 @@ class GenButton(discord.ui.Button):
         if category == "free":
             if not is_owner(interaction.user) and not has_required_status(interaction.user):
                 await interaction.followup.send(
-                    f"❌ You must put this in your **custom status** to generate:\n"
-                    f"`{STATUS_REQUIRED}`\n"
-                    f"`{STATUS_INVITE}`\n\n"
-                    f"After setting it, try again.",
+                    f"❌ You must put `{STATUS_REQUIRED}` in your **custom status** to generate.",
                     ephemeral=True
                 )
                 return
@@ -220,11 +235,18 @@ class GenButton(discord.ui.Button):
         save_json(STOCK_FILE, stock)
 
         dm_embed = discord.Embed(
-            title="ELDORADO",
-            description=f"```{compte}```",
+            title="🟡 ELDORADO • ACCOUNT DELIVERY",
+            description=(
+                f"**Here is your {service.capitalize()} account:**\n\n"
+                f"**━━━━━━━━━━━━━━━━━━━━━━━**\n"
+                f"```{compte}```\n"
+                f"**━━━━━━━━━━━━━━━━━━━━━━━**\n\n"
+                f"**⚠️ Don't share this account.**\n"
+                f"**⚠️ Don't change the password.**"
+            ),
             color=SERVICES[service]["color"]
         )
-        dm_embed.set_footer(text="DREAM GEN")
+        dm_embed.set_footer(text="DREAM GEN x ELDORADO • Break The Grind")
 
         try:
             await interaction.user.send(embed=dm_embed)
@@ -241,7 +263,7 @@ class GenButton(discord.ui.Button):
                 gen_channel = bot.get_channel(gen_channel_id)
                 if gen_channel:
                     msg = await gen_channel.send(
-                        f"{interaction.user.mention} generated an Eldorado account"
+                        f"🟡 {interaction.user.mention} generated an Eldorado account"
                     )
                     await asyncio.sleep(3)
                     try:
@@ -367,17 +389,24 @@ async def addstock(interaction: discord.Interaction, service: str, comptes: str)
         if log_channel:
             cat = SERVICES[service].get("category", "free").upper()
             cat_label = "FREE" if cat == "FREE" else "VIP"
+            cat_emoji = "🟡" if cat == "FREE" else "🟠"
 
             embed = discord.Embed(
-                title=f"NEW RESTOCK • {cat_label}",
-                description=f"**{len(liste)}** new Eldorado account(s) added.",
+                title=f"{cat_emoji} NEW RESTOCK • {cat_label}",
+                description=(
+                    f"**{len(liste)}** new Eldorado account(s) added to the stock!\n\n"
+                    f"**━━━━━━━━━━━━━━━━━━━━━━━**\n"
+                    f"**Service:** {SERVICES[service]['emoji']} {service.capitalize()}\n"
+                    f"**Added:** `+{len(liste)}`\n"
+                    f"**Total stock:** `{len(stock[service])}`\n"
+                    f"**Category:** {cat_emoji} `{cat_label}`\n"
+                    f"**━━━━━━━━━━━━━━━━━━━━━━━**"
+                ),
                 color=SERVICES[service]["color"]
             )
-            embed.add_field(name="Service", value=service.capitalize(), inline=True)
-            embed.add_field(name="Added", value=f"`+{len(liste)}`", inline=True)
-            embed.add_field(name="Stock", value=f"`{len(stock[service])}`", inline=True)
+            embed.set_thumbnail(url=bot.user.display_avatar.url)
             embed.set_footer(
-                text=f"Restocked by {interaction.user} • DREAM GEN",
+                text=f"Restocked by {interaction.user} • DREAM GEN x ELDORADO",
                 icon_url=interaction.user.display_avatar.url
             )
             embed.timestamp = discord.utils.utcnow()
@@ -416,8 +445,8 @@ async def stock_cmd(interaction: discord.Interaction):
     if not stock:
         await interaction.followup.send("Stock is empty.", ephemeral=True)
         return
-    free_msg = "**FREE:**\n"
-    premium_msg = "\n**VIP:**\n"
+    free_msg = "🟡 **FREE:**\n"
+    premium_msg = "\n🟠 **VIP:**\n"
     for service, comptes in stock.items():
         cat = SERVICES.get(service, {}).get("category", "free")
         line = f"**{service.capitalize()}** : `{len(comptes)}`\n"
