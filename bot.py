@@ -53,8 +53,7 @@ BANNER_URL = "https://i.imgur.com/JlkSP96.gif"
 # === COOLDOWN (2 minutes) ===
 COOLDOWN_SECONDS = 120
 
-# === STATUS REQUIS POUR LE FREE GEN ===
-# Le bot vérifie juste que le status contient ce texte
+# === STATUS REQUIS POUR LE FREE ===
 STATUS_REQUIRED = "free eldorado account"
 
 # === COULEURS ELDORADO ===
@@ -98,42 +97,19 @@ intents.presences = True
 intents.members = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# === PANEL EMBED (STYLE ELDORADO - version complète) ===
+# === PANEL EMBED (STYLE PROPRE, COMME TA CAPTURE) ===
 def build_panel_embed(category: str):
     if category == "free":
         color = ELDO_YELLOW
-        title = "🟡 ELDORADO GENERATOR • FREE"
-        desc = (
-            "**Welcome to the Eldorado Free Generator.**\n"
-            "Click a button below to receive your **free Eldorado account** in DM.\n\n"
-            "**━━━━━━━━━━━━━━━━━━━━━━━**\n"
-            "```\n"
-            "🟡 Free Eldorado accounts\n"
-            "⚡ Instant delivery via DM\n"
-            "🎯 2 min cooldown\n"
-            "📌 Status required\n"
-            "```\n"
-            "**━━━━━━━━━━━━━━━━━━━━━━━**"
-        )
+        title = "ELDORADO • FREE"
+        desc = "Click the button below to receive your free Eldorado account."
     else:
         color = ELDO_GOLD
-        title = "🟠 ELDORADO GENERATOR • VIP"
-        desc = (
-            "**Welcome to the Eldorado VIP Generator.**\n"
-            "Click a button below to receive your **VIP Eldorado account** in DM.\n\n"
-            "**━━━━━━━━━━━━━━━━━━━━━━━**\n"
-            "```\n"
-            "👑 VIP Eldorado accounts\n"
-            "⚡ Instant delivery via DM\n"
-            "🔥 VIP role required\n"
-            "🎯 2 min cooldown\n"
-            "```\n"
-            "**━━━━━━━━━━━━━━━━━━━━━━━**"
-        )
+        title = "ELDORADO • VIP"
+        desc = "Click the button below to receive your VIP Eldorado account."
 
     embed = discord.Embed(title=title, description=desc, color=color)
     embed.set_image(url=BANNER_URL)
-    embed.set_footer(text="DREAM GEN x ELDORADO • Break The Grind")
     return embed
 
 async def refresh_panel(category: str):
@@ -161,7 +137,6 @@ def has_vip(member: discord.Member) -> bool:
     return any(role.id == VIP_ROLE_ID for role in member.roles)
 
 def has_required_status(member: discord.Member) -> bool:
-    """Vérifie si le membre a le status requis dans son custom status."""
     for activity in member.activities:
         if isinstance(activity, discord.CustomActivity):
             if activity.name and STATUS_REQUIRED.lower() in activity.name.lower():
@@ -198,36 +173,32 @@ class GenButton(discord.ui.Button):
         service = self.service
         category = SERVICES[service].get("category", "free")
 
-        # === CHECK VIP POUR PREMIUM ===
         if category == "premium":
             if not is_owner(interaction.user) and not has_vip(interaction.user):
                 await interaction.followup.send(
-                    "🟠 You need the **VIP** role.", ephemeral=True
+                    "You need the **VIP** role.", ephemeral=True
                 )
                 return
 
-        # === CHECK STATUS POUR FREE ===
         if category == "free":
             if not is_owner(interaction.user) and not has_required_status(interaction.user):
                 await interaction.followup.send(
-                    f"❌ You must put `{STATUS_REQUIRED}` in your **custom status** to generate.",
+                    f"You must put `{STATUS_REQUIRED}` in your custom status to generate.",
                     ephemeral=True
                 )
                 return
 
-        # === CHECK COOLDOWN ===
         if not is_owner(interaction.user):
             remaining = get_remaining_cooldown(interaction.user.id)
             if remaining > 0:
                 await interaction.followup.send(
-                    f"⏳ Wait **{remaining}s** before generating again.", ephemeral=True
+                    f"Wait **{remaining}s** before generating again.", ephemeral=True
                 )
                 return
 
-        # === CHECK STOCK ===
         if service not in stock or not stock[service]:
             await interaction.followup.send(
-                f"❌ No stock left.", ephemeral=True
+                f"No stock left.", ephemeral=True
             )
             return
 
@@ -235,24 +206,17 @@ class GenButton(discord.ui.Button):
         save_json(STOCK_FILE, stock)
 
         dm_embed = discord.Embed(
-            title="🟡 ELDORADO • ACCOUNT DELIVERY",
-            description=(
-                f"**Here is your {service.capitalize()} account:**\n\n"
-                f"**━━━━━━━━━━━━━━━━━━━━━━━**\n"
-                f"```{compte}```\n"
-                f"**━━━━━━━━━━━━━━━━━━━━━━━**\n\n"
-                f"**⚠️ Don't share this account.**\n"
-                f"**⚠️ Don't change the password.**"
-            ),
+            title="ELDORADO",
+            description=f"```{compte}```",
             color=SERVICES[service]["color"]
         )
-        dm_embed.set_footer(text="DREAM GEN x ELDORADO • Break The Grind")
+        dm_embed.set_footer(text="DREAM GEN")
 
         try:
             await interaction.user.send(embed=dm_embed)
             if not is_owner(interaction.user):
                 set_cooldown(interaction.user.id)
-            await interaction.followup.send("✅ Sent in DM.", ephemeral=True)
+            await interaction.followup.send("Sent in DM.", ephemeral=True)
 
             if category == "premium":
                 gen_channel_id = PREMIUM_GEN_CHANNEL_ID
@@ -263,7 +227,7 @@ class GenButton(discord.ui.Button):
                 gen_channel = bot.get_channel(gen_channel_id)
                 if gen_channel:
                     msg = await gen_channel.send(
-                        f"🟡 {interaction.user.mention} generated an Eldorado account"
+                        f"{interaction.user.mention} generated an Eldorado account"
                     )
                     await asyncio.sleep(3)
                     try:
@@ -276,7 +240,7 @@ class GenButton(discord.ui.Button):
         except discord.Forbidden:
             stock[service].insert(0, compte)
             save_json(STOCK_FILE, stock)
-            await interaction.followup.send("❌ Enable your DMs.", ephemeral=True)
+            await interaction.followup.send("Enable your DMs.", ephemeral=True)
 
 # === VIEW ===
 class GenView(discord.ui.View):
@@ -379,7 +343,7 @@ async def addstock(interaction: discord.Interaction, service: str, comptes: str)
     stock.setdefault(service, []).extend(liste)
     save_json(STOCK_FILE, stock)
     await interaction.followup.send(
-        f"✅ **{len(liste)}** account(s) added. Stock: `{len(stock[service])}`",
+        f"**{len(liste)}** account(s) added. Stock: `{len(stock[service])}`",
         ephemeral=True
     )
     await refresh_all_panels()
@@ -389,24 +353,17 @@ async def addstock(interaction: discord.Interaction, service: str, comptes: str)
         if log_channel:
             cat = SERVICES[service].get("category", "free").upper()
             cat_label = "FREE" if cat == "FREE" else "VIP"
-            cat_emoji = "🟡" if cat == "FREE" else "🟠"
 
             embed = discord.Embed(
-                title=f"{cat_emoji} NEW RESTOCK • {cat_label}",
-                description=(
-                    f"**{len(liste)}** new Eldorado account(s) added to the stock!\n\n"
-                    f"**━━━━━━━━━━━━━━━━━━━━━━━**\n"
-                    f"**Service:** {SERVICES[service]['emoji']} {service.capitalize()}\n"
-                    f"**Added:** `+{len(liste)}`\n"
-                    f"**Total stock:** `{len(stock[service])}`\n"
-                    f"**Category:** {cat_emoji} `{cat_label}`\n"
-                    f"**━━━━━━━━━━━━━━━━━━━━━━━**"
-                ),
+                title=f"NEW RESTOCK • {cat_label}",
+                description=f"**{len(liste)}** new Eldorado account(s) added.",
                 color=SERVICES[service]["color"]
             )
-            embed.set_thumbnail(url=bot.user.display_avatar.url)
+            embed.add_field(name="Service", value=service.capitalize(), inline=True)
+            embed.add_field(name="Added", value=f"`+{len(liste)}`", inline=True)
+            embed.add_field(name="Stock", value=f"`{len(stock[service])}`", inline=True)
             embed.set_footer(
-                text=f"Restocked by {interaction.user} • DREAM GEN x ELDORADO",
+                text=f"Restocked by {interaction.user} • DREAM GEN",
                 icon_url=interaction.user.display_avatar.url
             )
             embed.timestamp = discord.utils.utcnow()
@@ -431,7 +388,7 @@ async def removeservice(interaction: discord.Interaction, nom: str):
     if nom in stock:
         del stock[nom]
         save_json(STOCK_FILE, stock)
-    await interaction.followup.send(f"✅ Service **{nom}** removed.", ephemeral=True)
+    await interaction.followup.send(f"Service **{nom}** removed.", ephemeral=True)
     await refresh_all_panels()
 
 @removeservice.autocomplete("nom")
@@ -445,8 +402,8 @@ async def stock_cmd(interaction: discord.Interaction):
     if not stock:
         await interaction.followup.send("Stock is empty.", ephemeral=True)
         return
-    free_msg = "🟡 **FREE:**\n"
-    premium_msg = "\n🟠 **VIP:**\n"
+    free_msg = "**FREE:**\n"
+    premium_msg = "\n**VIP:**\n"
     for service, comptes in stock.items():
         cat = SERVICES.get(service, {}).get("category", "free")
         line = f"**{service.capitalize()}** : `{len(comptes)}`\n"
@@ -464,7 +421,7 @@ async def resetcooldown(interaction: discord.Interaction, membre: discord.Member
     if str(membre.id) in cooldowns:
         del cooldowns[str(membre.id)]
         save_json(COOLDOWN_FILE, cooldowns)
-        await interaction.followup.send(f"✅ Cooldown of {membre.mention} reset.", ephemeral=True)
+        await interaction.followup.send(f"Cooldown of {membre.mention} reset.", ephemeral=True)
     else:
         await interaction.followup.send(f"{membre.mention} has no cooldown.", ephemeral=True)
 
