@@ -33,7 +33,6 @@ from dotenv import load_dotenv
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
 
-# === CONFIGURATION ===
 STOCK_FILE = "stock.json"
 SERVICES_FILE = "services.json"
 PANEL_FILE = "panel.json"
@@ -42,10 +41,8 @@ COOLDOWN_FILE = "cooldowns.json"
 LOG_CHANNEL_ID = 1551981969502511224
 FREE_GEN_CHANNEL_ID = 1551949049178103941
 PREMIUM_GEN_CHANNEL_ID = 1553802370494890147
-GET_ROLE_CHANNEL_ID = 1553849964738904064
 
 VIP_ROLE_ID = 1551996352643211345
-FREE_ROLE_ID = 1553847227900891216
 
 GUILD_ID = 1551949048221536288
 
@@ -81,7 +78,6 @@ cooldowns = load_json(COOLDOWN_FILE, {})
 intents = discord.Intents.default()
 intents.message_content = True
 intents.guilds = True
-intents.members = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 def build_panel_embed(category: str):
@@ -120,9 +116,6 @@ def is_owner(member: discord.Member) -> bool:
 def has_vip(member: discord.Member) -> bool:
     return any(role.id == VIP_ROLE_ID for role in member.roles)
 
-def has_free(member: discord.Member) -> bool:
-    return any(role.id == FREE_ROLE_ID for role in member.roles)
-
 def get_remaining_cooldown(user_id: int) -> int:
     if str(user_id) not in cooldowns:
         return 0
@@ -152,25 +145,20 @@ class GenButton(discord.ui.Button):
         service = self.service
         category = SERVICES[service].get("category", "free")
 
+        # === CHECK VIP POUR PREMIUM ===
         if category == "premium":
             if not is_owner(interaction.user) and not has_vip(interaction.user):
                 await interaction.followup.send("You need the **VIP** role.", ephemeral=True)
                 return
 
-        if category == "free":
-            if not is_owner(interaction.user) and not has_free(interaction.user):
-                await interaction.followup.send(
-                    f"You need the **Free Access** role. Go to <#{GET_ROLE_CHANNEL_ID}> to get it.",
-                    ephemeral=True
-                )
-                return
-
+        # === COOLDOWN ===
         if not is_owner(interaction.user):
             remaining = get_remaining_cooldown(interaction.user.id)
             if remaining > 0:
                 await interaction.followup.send(f"Wait **{remaining}s** before generating again.", ephemeral=True)
                 return
 
+        # === STOCK ===
         if service not in stock or not stock[service]:
             await interaction.followup.send("No stock left.", ephemeral=True)
             return
@@ -233,48 +221,6 @@ async def panel2(interaction: discord.Interaction):
     panel_data["premium"] = {"channel_id": msg.channel.id, "message_id": msg.id}
     save_json(PANEL_FILE, panel_data)
     await interaction.followup.send("Panel VIP sent.", ephemeral=True)
-
-# === /rolepanel ===
-@bot.tree.command(name="rolepanel", description="Send the role panel")
-@app_commands.default_permissions(administrator=True)
-async def rolepanel(interaction: discord.Interaction):
-    await interaction.response.defer(ephemeral=True)
-    embed = discord.Embed(
-        title="GET FREE ACCESS",
-        description=(
-            "React with 🟡 below to get the **Free Access** role.\n\n"
-            "This role allows you to generate **free Eldorado accounts**."
-        ),
-        color=ELDO_YELLOW
-    )
-    embed.set_footer(text="DREAM GEN x ELDORADO")
-    msg = await interaction.channel.send(embed=embed)
-    await msg.add_reaction("🟡")
-    await interaction.followup.send("Role panel sent.", ephemeral=True)
-
-@bot.event
-async def on_raw_reaction_add(payload):
-    if payload.user_id == bot.user.id:
-        return
-    if str(payload.emoji) != "🟡":
-        return
-    guild = bot.get_guild(payload.guild_id)
-    if not guild:
-        return
-    member = guild.get_member(payload.user_id)
-    if not member:
-        return
-    role = guild.get_role(FREE_ROLE_ID)
-    if not role:
-        return
-    try:
-        await member.add_roles(role)
-        try:
-            await member.send("You received the **Free Access** role on DREAM GEN!")
-        except:
-            pass
-    except Exception as e:
-        print(f"⚠️ Error adding role: {e}")
 
 @bot.tree.command(name="addservice", description="Add a FREE service")
 @app_commands.default_permissions(administrator=True)
