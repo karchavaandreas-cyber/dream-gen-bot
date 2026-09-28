@@ -59,10 +59,9 @@ EPIC_BLUE = 0x0078F2
 ELDO_EMOJI = "<:eldo:1553801485488365729>"
 EPIC_EMOJI = "<:epic:1554199484777369610>"
 
+# === SERVICES (EPIC UNIQUEMENT EN VIP) ===
 DEFAULT_SERVICES = {
     "eldorado-free": {"label": "ELDORADO", "emoji": ELDO_EMOJI, "color": ELDO_YELLOW, "category": "free"},
-    "epic-free":     {"label": "EPIC GAMES", "emoji": EPIC_EMOJI, "color": EPIC_BLUE,   "category": "free"},
-    "eldorado-vip":  {"label": "ELDORADO", "emoji": ELDO_EMOJI, "color": ELDO_GOLD, "category": "premium"},
     "epic-vip":      {"label": "EPIC GAMES", "emoji": EPIC_EMOJI, "color": EPIC_BLUE, "category": "premium"},
 }
 
@@ -366,10 +365,7 @@ async def addstock(
         await interaction.followup.send("No account provided.", ephemeral=True)
         return
 
-    # Déduplique les comptes
     all_accounts = list(set(all_accounts))
-
-    # Ajout en masse dans SQLite
     added = add_accounts_db(service, all_accounts)
     total = count_accounts_db(service)
 
@@ -387,7 +383,14 @@ async def addstock(
 
 @addstock.autocomplete("service")
 async def service_autocomplete(interaction: discord.Interaction, current: str):
-    return [app_commands.Choice(name=s.capitalize(), value=s) for s in SERVICES.keys() if current.lower() in s.lower()]
+    # Dédupliqué automatiquement
+    seen = set()
+    choices = []
+    for s in SERVICES.keys():
+        if s not in seen and current.lower() in s.lower():
+            choices.append(app_commands.Choice(name=s.capitalize(), value=s))
+            seen.add(s)
+    return choices
 
 # === /resetstock (vider un service) ===
 @bot.tree.command(name="resetstock", description="Clear all accounts from a service")
