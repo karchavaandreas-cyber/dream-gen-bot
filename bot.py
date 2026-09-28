@@ -28,13 +28,14 @@ import os
 import re
 import asyncio
 import time
+import sqlite3
 from dotenv import load_dotenv
 
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
 
 # === CONFIGURATION ===
-STOCK_FILE = "stock.json"
+DB_FILE = "dreamgen.db"
 SERVICES_FILE = "services.json"
 PANEL_FILE = "panel.json"
 COOLDOWN_FILE = "cooldowns.json"
@@ -65,6 +66,71 @@ DEFAULT_SERVICES = {
     "epic-vip":      {"label": "EPIC GAMES", "emoji": EPIC_EMOJI, "color": EPIC_BLUE, "category": "premium"},
 }
 
+# === BASE DE DONNÉES SQLITE ===
+def init_db():
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS accounts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        service TEXT NOT NULL,
+        account TEXT NOT NULL
+    )''')
+    c.execute('CREATE INDEX IF NOT EXISTS idx_service ON accounts(service)')
+    conn.commit()
+    conn.close()
+
+def add_accounts_db(service: str, accounts: list) -> int:
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.executemany(
+        "INSERT INTO accounts (service, account) VALUES (?, ?)",
+        [(service, acc) for acc in accounts]
+    )
+    conn.commit()
+    count = c.rowcount
+    conn.close()
+    return count
+
+def pop_account_db(service: str):
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("SELECT id, account FROM accounts WHERE service = ? LIMIT 1", (service,))
+    row = c.fetchone()
+    if row:
+        c.execute("DELETE FROM accounts WHERE id = ?", (row[0],))
+        conn.commit()
+        conn.close()
+        return row[1]
+    conn.close()
+    return None
+
+def count_accounts_db(service: str) -> int:
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("SELECT COUNT(*) FROM accounts WHERE service = ?", (service,))
+    count = c.fetchone()[0]
+    conn.close()
+    return count
+
+def clear_service_db(service: str) -> int:
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("DELETE FROM accounts WHERE service = ?", (service,))
+    conn.commit()
+    count = c.rowcount
+    conn.close()
+    return count
+
+def clear_all_db() -> int:
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("DELETE FROM accounts")
+    conn.commit()
+    count = c.rowcount
+    conn.close()
+    return count
+
+# === SERVICES / PANELS / COOLDOWNS (JSON) ===
 def load_json(path, default):
     if os.path.exists(path):
         with open(path, "r") as f:
@@ -75,16 +141,18 @@ def save_json(path, data):
     with open(path, "w") as f:
         json.dump(data, f, indent=4)
 
-stock = load_json(STOCK_FILE, {})
 SERVICES = load_json(SERVICES_FILE, DEFAULT_SERVICES)
 panel_data = load_json(PANEL_FILE, {"free": {"channel_id": None, "message_id": None}, "premium": {"channel_id": None, "message_id": None}})
 cooldowns = load_json(COOLDOWN_FILE, {})
 
+# === BOT ===
 intents = discord.Intents.default()
 intents.message_content = True
 intents.guilds = True
 intents.members = True
 bot = commands.Bot(command_prefix="!", intents=intents)
+
+init_db()
 
 def build_panel_embed(category: str):
     if category == "free":
@@ -136,7 +204,8 @@ def set_cooldown(user_id: int):
 class GenButton(discord.ui.Button):
     def __init__(self, service: str, label: str, emoji: str):
         emoji_obj = emoji if emoji else None
-        has_stock = service in stock and len(stock.get(service, [])) > 0
+        count = count_accounts_db(service)
+        has_stock = count > 0
         super().__init__(
             label=label,
             style=discord.ButtonStyle.secondary,
@@ -162,12 +231,10 @@ class GenButton(discord.ui.Button):
                 await interaction.followup.send(f"Wait **{remaining}s** before generating again.", ephemeral=True)
                 return
 
-        if service not in stock or not stock[service]:
+        compte = pop_account_db(service)
+        if not compte:
             await interaction.followup.send("No stock left.", ephemeral=True)
             return
-
-        compte = stock[service].pop(0)
-        save_json(STOCK_FILE, stock)
 
         dm_embed = discord.Embed(
             title=SERVICES[service]["label"],
@@ -195,8 +262,7 @@ class GenButton(discord.ui.Button):
 
             await refresh_all_panels()
         except discord.Forbidden:
-            stock[service].insert(0, compte)
-            save_json(STOCK_FILE, stock)
+            add_accounts_db(service, [compte])
             await interaction.followup.send("Enable your DMs.", ephemeral=True)
 
 class GenView(discord.ui.View):
@@ -259,13 +325,13 @@ async def addservice2(interaction: discord.Interaction, nom: str, label: str, em
     await interaction.followup.send(f"Service **{nom}** added as **VIP**.", ephemeral=True)
     await refresh_all_panels()
 
-# === /addstock (TEXTE OU FICHIER) ===
+# === /addstock (SQLite - supporte 1M+ comptes) ===
 @bot.tree.command(name="addstock", description="Add accounts to stock (text or .txt file)")
 @app_commands.default_permissions(administrator=True)
 @app_commands.describe(
     service="The service",
-    comptes="Accounts separated by commas or newlines (leave empty if using file)",
-    fichier="Optional .txt file with accounts (one per line)"
+    comptes="Accounts (optional if file provided)",
+    fichier="Optional .txt file (one account per line)"
 )
 async def addstock(
     interaction: discord.Interaction,
@@ -280,37 +346,35 @@ async def addstock(
         await interaction.followup.send("Unknown service.", ephemeral=True)
         return
 
-    # === RÉCUPÈRE LES COMPTES ===
     all_accounts = []
 
-    # Depuis le texte
     if comptes:
-        texte_accounts = [c.strip() for c in re.split(r"[,\n;]+", comptes) if c.strip()]
-        all_accounts.extend(texte_accounts)
+        all_accounts.extend([c.strip() for c in re.split(r"[,\n;]+", comptes) if c.strip()])
 
-    # Depuis le fichier
     if fichier:
         if not fichier.filename.endswith(".txt"):
-            await interaction.followup.send("File must be a .txt file.", ephemeral=True)
+            await interaction.followup.send("File must be .txt", ephemeral=True)
             return
         try:
             content = await fichier.read()
-            file_accounts = [c.strip() for c in content.decode("utf-8", errors="ignore").splitlines() if c.strip()]
-            all_accounts.extend(file_accounts)
+            all_accounts.extend([c.strip() for c in content.decode("utf-8", errors="ignore").splitlines() if c.strip()])
         except Exception as e:
             await interaction.followup.send(f"Error reading file: {e}", ephemeral=True)
             return
 
     if not all_accounts:
-        await interaction.followup.send("No account provided. Use 'comptes' or 'fichier'.", ephemeral=True)
+        await interaction.followup.send("No account provided.", ephemeral=True)
         return
 
-    # === AJOUTE AU STOCK ===
-    stock.setdefault(service, []).extend(all_accounts)
-    save_json(STOCK_FILE, stock)
+    # Déduplique les comptes
+    all_accounts = list(set(all_accounts))
+
+    # Ajout en masse dans SQLite
+    added = add_accounts_db(service, all_accounts)
+    total = count_accounts_db(service)
 
     await interaction.followup.send(
-        f"**{len(all_accounts)}** account(s) added to **{SERVICES[service]['label']}**. Stock: `{len(stock[service])}`",
+        f"**{added}** account(s) added to **{SERVICES[service]['label']}**. Total: `{total}`",
         ephemeral=True
     )
 
@@ -319,11 +383,37 @@ async def addstock(
     if LOG_CHANNEL_ID:
         log_channel = bot.get_channel(LOG_CHANNEL_ID)
         if log_channel:
-            await log_channel.send(f"**{len(all_accounts)}** {SERVICES[service]['label']} account(s) restocked.")
+            await log_channel.send(f"**{added}** {SERVICES[service]['label']} account(s) restocked.")
 
 @addstock.autocomplete("service")
 async def service_autocomplete(interaction: discord.Interaction, current: str):
     return [app_commands.Choice(name=s.capitalize(), value=s) for s in SERVICES.keys() if current.lower() in s.lower()]
+
+# === /resetstock (vider un service) ===
+@bot.tree.command(name="resetstock", description="Clear all accounts from a service")
+@app_commands.default_permissions(administrator=True)
+@app_commands.describe(service="Service to clear (or 'all' to clear everything)")
+async def resetstock(interaction: discord.Interaction, service: str):
+    await interaction.response.defer(ephemeral=True)
+    service = service.lower()
+
+    if service == "all":
+        count = clear_all_db()
+        await interaction.followup.send(f"Cleared **{count}** accounts from all services.", ephemeral=True)
+    elif service in SERVICES:
+        count = clear_service_db(service)
+        await interaction.followup.send(f"Cleared **{count}** accounts from **{SERVICES[service]['label']}**.", ephemeral=True)
+    else:
+        await interaction.followup.send(f"Unknown service. Use 'all' or a valid service.", ephemeral=True)
+        return
+
+    await refresh_all_panels()
+
+@resetstock.autocomplete("service")
+async def resetstock_autocomplete(interaction: discord.Interaction, current: str):
+    choices = [app_commands.Choice(name="ALL SERVICES", value="all")]
+    choices += [app_commands.Choice(name=s.capitalize(), value=s) for s in SERVICES.keys() if current.lower() in s.lower()]
+    return choices
 
 @bot.tree.command(name="removeservice", description="Remove a service")
 @app_commands.default_permissions(administrator=True)
@@ -335,10 +425,8 @@ async def removeservice(interaction: discord.Interaction, nom: str):
         return
     del SERVICES[nom]
     save_json(SERVICES_FILE, SERVICES)
-    if nom in stock:
-        del stock[nom]
-        save_json(STOCK_FILE, stock)
-    await interaction.followup.send(f"Service **{nom}** removed.", ephemeral=True)
+    clear_service_db(nom)
+    await interaction.followup.send(f"Service **{nom}** removed (and its stock).", ephemeral=True)
     await refresh_all_panels()
 
 @removeservice.autocomplete("nom")
@@ -348,16 +436,13 @@ async def removeservice_autocomplete(interaction: discord.Interaction, current: 
 @bot.tree.command(name="stock", description="View current stock")
 async def stock_cmd(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
-    if not stock:
-        await interaction.followup.send("Stock is empty.", ephemeral=True)
-        return
     free_msg = "**FREE:**\n"
     premium_msg = "\n**VIP:**\n"
-    for service, comptes in stock.items():
-        cat = SERVICES.get(service, {}).get("category", "free")
-        label = SERVICES.get(service, {}).get("label", service)
-        line = f"**{label}** : `{len(comptes)}`\n"
-        if cat == "premium":
+    for service, data in SERVICES.items():
+        count = count_accounts_db(service)
+        label = data.get("label", service)
+        line = f"**{label}** : `{count}`\n"
+        if data.get("category") == "premium":
             premium_msg += line
         else:
             free_msg += line
