@@ -59,9 +59,12 @@ EPIC_BLUE = 0x0078F2
 ELDO_EMOJI = "<:eldo:1553801485488365729>"
 EPIC_EMOJI = "<:epic:1554199484777369610>"
 
-# === SERVICES (EPIC UNIQUEMENT EN VIP) ===
+# === SERVICES ===
+# FREE = Eldorado uniquement
+# VIP = Eldorado + Epic Games
 DEFAULT_SERVICES = {
     "eldorado-free": {"label": "ELDORADO", "emoji": ELDO_EMOJI, "color": ELDO_YELLOW, "category": "free"},
+    "eldorado-vip":  {"label": "ELDORADO", "emoji": ELDO_EMOJI, "color": ELDO_GOLD, "category": "premium"},
     "epic-vip":      {"label": "EPIC GAMES", "emoji": EPIC_EMOJI, "color": EPIC_BLUE, "category": "premium"},
 }
 
@@ -324,7 +327,6 @@ async def addservice2(interaction: discord.Interaction, nom: str, label: str, em
     await interaction.followup.send(f"Service **{nom}** added as **VIP**.", ephemeral=True)
     await refresh_all_panels()
 
-# === /addstock (SQLite - supporte 1M+ comptes) ===
 @bot.tree.command(name="addstock", description="Add accounts to stock (text or .txt file)")
 @app_commands.default_permissions(administrator=True)
 @app_commands.describe(
@@ -383,7 +385,6 @@ async def addstock(
 
 @addstock.autocomplete("service")
 async def service_autocomplete(interaction: discord.Interaction, current: str):
-    # Dédupliqué automatiquement
     seen = set()
     choices = []
     for s in SERVICES.keys():
@@ -392,7 +393,6 @@ async def service_autocomplete(interaction: discord.Interaction, current: str):
             seen.add(s)
     return choices
 
-# === /resetstock (vider un service) ===
 @bot.tree.command(name="resetstock", description="Clear all accounts from a service")
 @app_commands.default_permissions(administrator=True)
 @app_commands.describe(service="Service to clear (or 'all' to clear everything)")
