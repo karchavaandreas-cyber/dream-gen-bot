@@ -33,6 +33,7 @@ from dotenv import load_dotenv
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
 
+# === CONFIGURATION ===
 STOCK_FILE = "stock.json"
 SERVICES_FILE = "services.json"
 PANEL_FILE = "panel.json"
@@ -46,18 +47,26 @@ VIP_ROLE_ID = 1551996352643211345
 
 GUILD_ID = 1551949048221536288
 
-BANNER_URL = "https://i.imgur.com/JlkSP96.gif"
+# === BANNIÈRE ===
+BANNER_URL = "https://i.imgur.com/la0RGzT.gif"
 
 COOLDOWN_SECONDS = 120
 
+# === COULEURS ===
 ELDO_YELLOW = 0xFFC72C
 ELDO_GOLD = 0xFFAC33
+EPIC_BLUE = 0x0078F2
 
+# === EMOJIS ===
 ELDO_EMOJI = "<:eldo:1553801485488365729>"
+EPIC_EMOJI = "<:epic:1554199484777369610>"
 
+# === SERVICES ===
 DEFAULT_SERVICES = {
     "eldorado-free": {"label": "ELDORADO", "emoji": ELDO_EMOJI, "color": ELDO_YELLOW, "category": "free"},
-    "eldorado-vip":  {"label": "ELDORADO", "emoji": ELDO_EMOJI, "color": ELDO_GOLD,   "category": "premium"},
+    "epic-free":     {"label": "EPIC GAMES", "emoji": EPIC_EMOJI, "color": EPIC_BLUE,   "category": "free"},
+    "eldorado-vip":  {"label": "ELDORADO VIP", "emoji": ELDO_EMOJI, "color": ELDO_GOLD, "category": "premium"},
+    "epic-vip":      {"label": "EPIC GAMES VIP", "emoji": EPIC_EMOJI, "color": EPIC_BLUE, "category": "premium"},
 }
 
 def load_json(path, default):
@@ -78,17 +87,18 @@ cooldowns = load_json(COOLDOWN_FILE, {})
 intents = discord.Intents.default()
 intents.message_content = True
 intents.guilds = True
+intents.members = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 def build_panel_embed(category: str):
     if category == "free":
         color = ELDO_YELLOW
-        title = "ELDORADO • FREE"
-        desc = "Click the button below to receive your free Eldorado account."
+        title = "FREE GENERATOR"
+        desc = "Click a button below to receive your free account in DM."
     else:
         color = ELDO_GOLD
-        title = "ELDORADO • VIP"
-        desc = "Click the button below to receive your VIP Eldorado account."
+        title = "VIP GENERATOR"
+        desc = "Click a button below to receive your VIP account in DM."
     embed = discord.Embed(title=title, description=desc, color=color)
     embed.set_image(url=BANNER_URL)
     return embed
@@ -145,20 +155,17 @@ class GenButton(discord.ui.Button):
         service = self.service
         category = SERVICES[service].get("category", "free")
 
-        # === CHECK VIP POUR PREMIUM ===
         if category == "premium":
             if not is_owner(interaction.user) and not has_vip(interaction.user):
                 await interaction.followup.send("You need the **VIP** role.", ephemeral=True)
                 return
 
-        # === COOLDOWN ===
         if not is_owner(interaction.user):
             remaining = get_remaining_cooldown(interaction.user.id)
             if remaining > 0:
                 await interaction.followup.send(f"Wait **{remaining}s** before generating again.", ephemeral=True)
                 return
 
-        # === STOCK ===
         if service not in stock or not stock[service]:
             await interaction.followup.send("No stock left.", ephemeral=True)
             return
@@ -167,7 +174,7 @@ class GenButton(discord.ui.Button):
         save_json(STOCK_FILE, stock)
 
         dm_embed = discord.Embed(
-            title="ELDORADO",
+            title=SERVICES[service]["label"],
             description=f"```{compte}```",
             color=SERVICES[service]["color"]
         )
@@ -183,7 +190,7 @@ class GenButton(discord.ui.Button):
             if gen_channel_id:
                 gen_channel = bot.get_channel(gen_channel_id)
                 if gen_channel:
-                    msg = await gen_channel.send(f"{interaction.user.mention} generated an Eldorado account")
+                    msg = await gen_channel.send(f"{interaction.user.mention} generated a **{SERVICES[service]['label']}** account")
                     await asyncio.sleep(3)
                     try:
                         await msg.delete()
@@ -275,7 +282,7 @@ async def addstock(interaction: discord.Interaction, service: str, comptes: str)
     if LOG_CHANNEL_ID:
         log_channel = bot.get_channel(LOG_CHANNEL_ID)
         if log_channel:
-            await log_channel.send(f"**{len(liste)}** Eldorado account(s) restocked.")
+            await log_channel.send(f"**{len(liste)}** {SERVICES[service]['label']} account(s) restocked.")
 
 @addstock.autocomplete("service")
 async def service_autocomplete(interaction: discord.Interaction, current: str):
@@ -311,7 +318,8 @@ async def stock_cmd(interaction: discord.Interaction):
     premium_msg = "\n**VIP:**\n"
     for service, comptes in stock.items():
         cat = SERVICES.get(service, {}).get("category", "free")
-        line = f"**{service.capitalize()}** : `{len(comptes)}`\n"
+        label = SERVICES.get(service, {}).get("label", service)
+        line = f"**{label}** : `{len(comptes)}`\n"
         if cat == "premium":
             premium_msg += line
         else:
