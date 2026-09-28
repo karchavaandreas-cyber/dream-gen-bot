@@ -47,7 +47,6 @@ VIP_ROLE_ID = 1551996352643211345
 
 GUILD_ID = 1551949048221536288
 
-# === BANNIÈRE ===
 BANNER_URL = "https://i.imgur.com/la0RGzT.gif"
 
 COOLDOWN_SECONDS = 120
@@ -65,8 +64,8 @@ EPIC_EMOJI = "<:epic:1554199484777369610>"
 DEFAULT_SERVICES = {
     "eldorado-free": {"label": "ELDORADO", "emoji": ELDO_EMOJI, "color": ELDO_YELLOW, "category": "free"},
     "epic-free":     {"label": "EPIC GAMES", "emoji": EPIC_EMOJI, "color": EPIC_BLUE,   "category": "free"},
-    "eldorado-vip":  {"label": "ELDORADO VIP", "emoji": ELDO_EMOJI, "color": ELDO_GOLD, "category": "premium"},
-    "epic-vip":      {"label": "EPIC GAMES VIP", "emoji": EPIC_EMOJI, "color": EPIC_BLUE, "category": "premium"},
+    "eldorado-vip":  {"label": "ELDORADO", "emoji": ELDO_EMOJI, "color": ELDO_GOLD, "category": "premium"},
+    "epic-vip":      {"label": "EPIC GAMES", "emoji": EPIC_EMOJI, "color": EPIC_BLUE, "category": "premium"},
 }
 
 def load_json(path, default):
@@ -90,6 +89,7 @@ intents.guilds = True
 intents.members = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
+# === PANEL EMBED (STYLE PROPRE) ===
 def build_panel_embed(category: str):
     if category == "free":
         color = ELDO_YELLOW
@@ -99,6 +99,7 @@ def build_panel_embed(category: str):
         color = ELDO_GOLD
         title = "VIP GENERATOR"
         desc = "Click a button below to receive your VIP account in DM."
+
     embed = discord.Embed(title=title, description=desc, color=color)
     embed.set_image(url=BANNER_URL)
     return embed
