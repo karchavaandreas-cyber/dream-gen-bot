@@ -47,7 +47,8 @@ VIP_ROLE_ID = 1551996352643211345
 
 GUILD_ID = 1551949048221536288
 
-BANNER_URL = "https://i.imgur.com/la0RGzT.gif"
+# === BANNIÈRE (ton nouveau GIF) ===
+BANNER_URL = "https://i.imgur.com/20MxNVU.gif"
 
 COOLDOWN_SECONDS = 120
 
@@ -89,7 +90,6 @@ intents.guilds = True
 intents.members = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# === PANEL EMBED (STYLE PROPRE) ===
 def build_panel_embed(category: str):
     if category == "free":
         color = ELDO_YELLOW
