@@ -47,21 +47,17 @@ VIP_ROLE_ID = 1551996352643211345
 
 GUILD_ID = 1551949048221536288
 
-# === BANNIÈRE (ton nouveau GIF) ===
 BANNER_URL = "https://i.imgur.com/20MxNVU.gif"
 
 COOLDOWN_SECONDS = 120
 
-# === COULEURS ===
 ELDO_YELLOW = 0xFFC72C
 ELDO_GOLD = 0xFFAC33
 EPIC_BLUE = 0x0078F2
 
-# === EMOJIS ===
 ELDO_EMOJI = "<:eldo:1553801485488365729>"
 EPIC_EMOJI = "<:epic:1554199484777369610>"
 
-# === SERVICES ===
 DEFAULT_SERVICES = {
     "eldorado-free": {"label": "ELDORADO", "emoji": ELDO_EMOJI, "color": ELDO_YELLOW, "category": "free"},
     "epic-free":     {"label": "EPIC GAMES", "emoji": EPIC_EMOJI, "color": EPIC_BLUE,   "category": "free"},
@@ -99,7 +95,6 @@ def build_panel_embed(category: str):
         color = ELDO_GOLD
         title = "VIP GENERATOR"
         desc = "Click a button below to receive your VIP account in DM."
-
     embed = discord.Embed(title=title, description=desc, color=color)
     embed.set_image(url=BANNER_URL)
     return embed
@@ -264,26 +259,67 @@ async def addservice2(interaction: discord.Interaction, nom: str, label: str, em
     await interaction.followup.send(f"Service **{nom}** added as **VIP**.", ephemeral=True)
     await refresh_all_panels()
 
-@bot.tree.command(name="addstock", description="Add accounts to stock")
+# === /addstock (TEXTE OU FICHIER) ===
+@bot.tree.command(name="addstock", description="Add accounts to stock (text or .txt file)")
 @app_commands.default_permissions(administrator=True)
-async def addstock(interaction: discord.Interaction, service: str, comptes: str):
+@app_commands.describe(
+    service="The service",
+    comptes="Accounts separated by commas or newlines (leave empty if using file)",
+    fichier="Optional .txt file with accounts (one per line)"
+)
+async def addstock(
+    interaction: discord.Interaction,
+    service: str,
+    comptes: str = "",
+    fichier: discord.Attachment = None
+):
     await interaction.response.defer(ephemeral=True)
     service = service.lower()
+
     if service not in SERVICES:
         await interaction.followup.send("Unknown service.", ephemeral=True)
         return
-    liste = [c.strip() for c in re.split(r"[,\n;]+", comptes) if c.strip()]
-    if not liste:
-        await interaction.followup.send("No valid account found.", ephemeral=True)
+
+    # === RÉCUPÈRE LES COMPTES ===
+    all_accounts = []
+
+    # Depuis le texte
+    if comptes:
+        texte_accounts = [c.strip() for c in re.split(r"[,\n;]+", comptes) if c.strip()]
+        all_accounts.extend(texte_accounts)
+
+    # Depuis le fichier
+    if fichier:
+        if not fichier.filename.endswith(".txt"):
+            await interaction.followup.send("File must be a .txt file.", ephemeral=True)
+            return
+        try:
+            content = await fichier.read()
+            file_accounts = [c.strip() for c in content.decode("utf-8", errors="ignore").splitlines() if c.strip()]
+            all_accounts.extend(file_accounts)
+        except Exception as e:
+            await interaction.followup.send(f"Error reading file: {e}", ephemeral=True)
+            return
+
+    if not all_accounts:
+        await interaction.followup.send("No account provided. Use 'comptes' or 'fichier'.", ephemeral=True)
         return
-    stock.setdefault(service, []).extend(liste)
+
+    # === AJOUTE AU STOCK ===
+    stock.setdefault(service, []).extend(all_accounts)
     save_json(STOCK_FILE, stock)
-    await interaction.followup.send(f"**{len(liste)}** account(s) added. Stock: `{len(stock[service])}`", ephemeral=True)
+
+    await interaction.followup.send(
+        f"**{len(all_accounts)}** account(s) added to **{SERVICES[service]['label']}**. Stock: `{len(stock[service])}`",
+        ephemeral=True
+    )
+
     await refresh_all_panels()
+
     if LOG_CHANNEL_ID:
         log_channel = bot.get_channel(LOG_CHANNEL_ID)
         if log_channel:
-            await log_channel.send(f"**{len(liste)}** {SERVICES[service]['label']} account(s) restocked.")
+            await log_channel.send(f"**{len(all_accounts)}** {SERVICES[service]['label']} account(s) restocked.")
 
 @addstock.autocomplete("service")
 async def service_autocomplete(interaction: discord.Interaction, current: str):
